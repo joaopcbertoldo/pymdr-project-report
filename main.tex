@@ -212,7 +212,7 @@ The main input types are \code{HtmlElement}s (from \code{lxml.html}), the classe
 
 
 
-\subsubsection{Classes}
+\subsubsection{Classes} \label{txt:classes}
 
 \paragraph{GNode}
 
@@ -242,7 +242,7 @@ These two are important data structures for understanding the code because the a
 
 
 
-\subsubsection{Functions} \label{txt:functions}
+\subsubsection{Functions} \label{txt:functions} 
 
 The main functions correspond almost exactly to the pseudo codes described in the original paper. Their behaviors can be summarized as follows:
 
@@ -300,7 +300,7 @@ The extension must be installed using Chrome's developer mode on and with a flas
 
 
 
-\subsection{Other modules}
+\subsection{Other modules} \label{txt:other-modules}
 
 The other two modules are rather for support tasks like managing files and pre-treating the HTML files. They are mostly used in the API and in the script used to process all the pages (more details in the next sections). 
 
@@ -328,22 +328,20 @@ From the very beginning, I realized it would be painful to test and inspect the 
 
 \paragraph{(Very) Slow first results} 
 
-My very first tests showed that my code was extremely slow. Although I did not record execution times, the typical execution was at the tens of seconds or even minutes. This is way above the author's claims of sub-second execution times.
+My very first tests showed that my code was extremely slow. Although I did not record execution times, the typical execution was at the tens of seconds or even minutes. This is way above the author's claims of sub-second execution times. Because of the slow execution times, I decided to start collecting pages and caching them for later execution. 
 
-% slowliness due to considering all the tags
+After re-reading the technical paper carefully, I realized that the algorithm is only supposed to consider table-related tags (table, tr, th, td, ...). In addition to that, the results did not seem correct at all. The algorithm was not capable of identifying any data record. This made sense because the algorithm was simply not intended to work with all the tags. 
 
-% !! in technical report, page 2, col left, section 1 (intro)
-%   "It currently
-% finds all data records formed by table and form related tags, i.e.,
-% table, form, tr, td
+To address this matter, I created a simple filter to ignore all other tags. It vastly accelerated the execution to a few seconds in the worst case. However, many of pages did not have any data record at all. After manually inspecting a few examples, I realized that many of the pages simply did not use table tags, but lists (ol and ul) for organizing the data records. 
+
+My hypothesis is that web pages, today, use table tags way less often today. According to \cite{tables-basics}: \say{...a lot of people used to use HTML tables to lay out web pages...}. This essentially affects the algorithm's assumptions because it is specifically made to work well with these tags. Therefore, I decided to make sure it was not a matter of bad parameters. So I tested the algorithm with different threshold values, since this is the most important parameter, in addition to a few variations. 
 
 
-% More precisely, I investigated how the string edit distance threshold (used to compare GNodes) and took into consideration other HTML tags that the original paper's implementation ignores. 
-% \section{Algorithm tuning}
 
-\subsection{Investigation}
+\subsection{Analyzed factors}
 
-\paragraph{Factors and hypothesis}
+The following paragraphs explain the different variations of the algorithm that I tested.
+
 % - table elements only --> cutting off for performance in computing distances
 % - table elements only --> too little results
 % -- manual check that there are not many tables
@@ -351,17 +349,23 @@ My very first tests showed that my code was extremely slow. Although I did not r
 
 \paragraph{Threshold}
 
-\paragraph{HTML Lists}
+The original recommended value was of $0.30$, so it makes sense to keep the threshold range \emph{around} $0.30$. Also, as I informally observed, the slowest part of the algorithm (by far) is the distance computation (see \nameref{txt:functions}). This part of the algorithm is independent of the threshold choice, which means that having a large value set for this parameter should not slow down the tests execution so much. So I tested with all the values in ${0.05, 0.06, ..., 0.49, 0.50}$.
 
-\paragraph{Edit distance distortion issue}
+\paragraph{HTML Lists} 
 
-% -- node namer == utility, should've done differently?, bug?, simpler with fun? --> a bit more of arguments carrying, it was necessary bc (reason?) the HtmlElements do not have constant id/hash, maybe it's the same problem as with the str???, 
+MDR was designed to work well on pages that use table tags, so taking all the HTML tags into consideration did not make any sense. On the other hand, taking the authors' same assumption and only taking into consideration the table tags seemed too restrictive. Thus, I decided to consider both a version only with tables and another with lists additionally. This behavior can be controlled by changing the function \code{should\_process\_node} in \emph{core.py}.
 
-% would have chosen another framework if I knew...
-% STR_DIST_USE_NODE_NAME_CLEANUP
+\paragraph{Edit distance distortion}
+
+While reviewing and cleaning my code, I realized that I could have introduced an issue to the algorithm by distorting the edit distances. This happened due to the naming solution (see the class NodeNamer in the section \nameref{txt:classes}) I used to reference the nodes. Since it adds a new attribute to the tags. While serializing subtrees this attribute ends up being part of the string. This affects the distance measure especially for nodes with little content because the sizes of the attribute's key and value make the distances decrease artificially. 
+
+For this reason, I made a hot fix that cleans all the attributes from the subtrees before measuring the distances. The parameter used to control this behavior is the constant \code{STR\_DIST\_USE\_NODE\_NAME\_CLEANUP} in \emph{core.py}.
+
+Therefore, there are 4 tests: $\{\text{with lists}, \text{without lists}\} X \{\text{with correction}, \text{without correction}\}$ (where \say{correction} refers to the distance distortion fix). For each of those, I tested all the threshold values, looked up for the best values, and inspected some \emph{promising} results manually in detail.
 
 
-\subsection{Experiments}
+
+\subsection{Procedure}
 
 \paragraph{Test pages}
 
@@ -369,31 +373,33 @@ My very first tests showed that my code was extremely slow. Although I did not r
 % - pages that do not exist anymore --> had to verify myself
 % - did not give exact urls --> i picked some random ones
 
+First, I collected sample pages from the same websites mentioned in \cite{mdr}\footnotemark. Several of them did not exist or completely changed of domain/content. In total, I collected $94$ pages, of which $86$ were processed - the others went through some problem in the process and then were ignored. I collected these pages using the Chrome extension and annotating the ground truth number of data records on the page. The pages' URLs and their annotations can be seen in the file \emph{outputs/pages-meta.yml}.
 
-% OMNI project page pointed out in the project is not available anymore
-% http://disl.cc.gatech.edu/Omini/
-% paper:
-%     A Fully Automated Object Extraction System for the World Wide Web
-%     https://ieeexplore.ieee.org/document/918966?arnumber=918966
-%     https://www.researchgate.net/publication/3895240_A_Fully_Automated_Object_Extraction_System_for_the_World_Wide_Web
+\footnotetext{I looked for the original cached pages used by the authors and even tried to get in touch with them to find them. Unfortunately I could not find them out. I also tried to look up for the pages used in the two main references of the paper (OMNI and IEPAD), but they are also not available.}
 
-% ... apparently it move to here: https://www.cc.gatech.edu/projects/disl/Omini/
-%     pages are cached locally...
-%         https://www.cc.gatech.edu/projects/disl/Omini/local.html
-%         cannot access
+\paragraph{Script}
 
-% neither is the IEPAD one
-% http://140.115.155.99
+I used the script in \path{dev/training/preprocess_all.py} to go through all the thresholds, all the pages, step by step. To control the other parameters, one should directly change the code in \path{core.py}. It is possible to choose, directly in the script, which steps should be executed to avoid useless executions when running it multiple times.
 
-% so, i collected my own pages...
+\paragraph{Outputs}
 
-\paragraph{Files management}
+The results and intermediate files generated by the script are organized in the folder \path{outputs} under the root of the project. This is due to the \path{file_management.py} module and can be changed via the file \path{config.yml} in the root of the project (see the section \nameref{txt:other-modules} for more information). The folder contains the following sub directories: 
 
-\paragraph{Python string hashing issue}
-% -- str hash problem...
+\begin{itemize}
+
+    \item \path{raw\_htmls}: contains the cached HTML pages without any modification;
+        
+    \item \path{preprocessed\_htmls}: contains HTML files after two phases of preprocessin: (1) without comments, script, and style tags; (2) with the node names added to all the tags (see \code{NodeNamer} in \nameref{txt:classes}).
+        
+    \item \path{intermediate\_results}: 
+        
+    \item \path{results}: 
+    
+\end{itemize}
+
+
 
 \subsection{Results}
-% - table elements only --> cutting of for performance in computing distances
 
 \paragraph{Evaluation}
 
@@ -403,6 +409,9 @@ My very first tests showed that my code was extremely slow. Although I did not r
 
 % nb with comments
 % evaluating_stuff-with-list-with-cleanup.ipynb
+
+
+% would have chosen another framework if I knew the id issue...
 
 
 % %%%%%%%%%%%%%%%%%%%%%%%%%   REFS   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
