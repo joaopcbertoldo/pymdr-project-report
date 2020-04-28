@@ -4,6 +4,10 @@
 \usepackage[export]{adjustbox}
 \usepackage[bottom]{footmisc}
 
+\usepackage{tikz}
+\usepackage{graphicx}
+\usetikzlibrary{positioning}
+
 \lstdefinestyle{mystyle}{                   
     captionpos=b,
 }
@@ -11,14 +15,26 @@
 \lstset{language=Python}
 
 
-\definecolor{codegray}{gray}{0.93}
-\newcommand{\code}[1]{\colorbox{codegray}{\texttt{#1}}}
-% \newcommand{\code}[1]{\texttt{#1}}
-
 % %%%%%%%%%%%%%%%%%%%%%%%%%   COMMANDS   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \newcommand{\ts}{\textsuperscript}
 \newcommand{\maxnodes}{N_{nodes-max}}
 \newcommand{\dth}{D_{threshold}}
+
+
+\newcommand{\func}[1]{\path{#1()}}
+
+\newcommand{\computedistances}{\func{compute_distances}}
+\newcommand{\comparecombinations}{\func{_compare_combinations}}
+\newcommand{\finddataregions}{\func{find_data_regions}}
+\newcommand{\identifydataregions}{\func{_identify_data_regions}}
+\newcommand{\finddatarecords}{\func{find_data_records}}
+\newcommand{\findrecordsone}{\func{_find_records_1}}
+\newcommand{\findrecordsn}{\func{_find_records_n}}
+
+\newcommand{\gn}{\path{GNode}}
+\newcommand{\dr}{\path{DataRegion}}
+\newcommand{\drec}{\path{DataRecord}}
+\newcommand{\nodenamer}{\path{NodeNamer}}
 
 
 % %%%%%%%%%%%%%%%%%%%%%%%%%   HEADER   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -73,7 +89,6 @@
 
 \section{Introduction}
 
-
 \section{Original Paper}
 
 To implement this algorithm, I based myself on \cite{mdr-technical}. It was published in 2003 and, according to Semantic Scholar \citep{mdr-semantic-scholar}, this article has been cited over 400 times, of which more than 90 articles were highly influenced by it.
@@ -107,9 +122,9 @@ MDR finds data records inside table tags in HTML pages without using any heurist
 
 \paragraph{Rationale}
 
-Consider an HTML document as a tree structure where tags inside another are children of the latter (see Figure \ref{fig:html-as-tree}). The core of the algorithm is based on three ideas: the notion of Generalized Node (GNode for short), Data Region (DR), and a measure of distance between GNodes. A GNode is a set of $n \in {1, ..., \maxnodes}$ HTML adjacent nodes (thus, nodes under the same parent node). A DR is a set of adjacent GNodes that are \emph{similar}. See Figure \ref{fig:gnode-and-dr} for an illustration of these two concepts.
+Consider an HTML document as a tree structure where tags inside another are children of the latter (see Figure \ref{fig:html-as-tree}). The core of the algorithm is based on three ideas: the notion of Generalized Node (\gn{}  for short), Data Region (DR), and a measure of distance between \gn{} s. A \gn{}  is a set of $n \in {1, ..., \maxnodes}$ HTML adjacent nodes (thus, nodes under the same parent node). A DR is a set of adjacent \gn{} s that are \emph{similar}. See Figure \ref{fig:gnode-and-dr} for an illustration of these two concepts.
 
-\say{Similar}, in this context, means that the distance between each 2 directly adjacent GNodes is bellow the threshold $\dth$. The measure of distance is the Normalized Levenshtein Edit Distance \footnote{See the \cite{lev-dist-wiki} for more information.}:
+\say{Similar}, in this context, means that the distance between each 2 directly adjacent \gn{} s is bellow the threshold $\dth$. The measure of distance is the Normalized Levenshtein Edit Distance \footnote{See the \cite{lev-dist-wiki} for more information.}:
 
 \begin{equation}\label{eq:dist}
     d\left(s_{1}, s_{2}\right)=\frac{LevenshteinEditDist\left(s_{1}, s_{2}\right)}{\frac{\text {length}\left(s_{1}\right)+\text {length}\left(s_{2}\right)}{2}} \in [0, 1]
@@ -122,16 +137,14 @@ The values of $\maxnodes$ and $\dth$ are parameters of the algorithm and the aut
     \centering
     
     \begin{subfigure}[b]{.45\textwidth}
-        % \centering
         \includegraphics[width=0.95\linewidth,left]{fig/html-as-tree.png}
         \caption{HTML as a tree structure.}
         \label{fig:html-as-tree}
     \end{subfigure}
     %
     \begin{subfigure}[b]{.54\textwidth}
-        
         \includegraphics[width=0.95\linewidth,right]{fig/gnode-and-dr.png}
-        \caption{GNode and DataRegion concepts examples.}
+        \caption{\gn{} and \dr{} concepts examples.}
         \label{fig:gnode-and-dr}
     \end{subfigure}
     
@@ -198,31 +211,37 @@ In order to test my implementation, I collected HTML pages and annotated the num
 
 This is where the algorithm itself and the entities (classes) that interact with it live. The code in this module is not supposed to manage any of the files, input or outputs, nor treat the way they are loaded and saved. Instead, it expects all the inputs to be in known specific formats.
 
-The main input types are \code{HtmlElement}s (from \code{lxml.html}), the classes defined in the module (discussed next), and a few dictionary structures, which are specified with \code{typing}\footnote{\href{https://docs.python.org/3.6/library/typing.html}{Link to the typing library's page in Python 3.6}.} for documentation\footnote{\href{https://github.com/joaopcbertoldo/pymdr/blob/7ff7f7653feff23704b6b786db8499188ba378af/src/core.py\#L273}{Link to their definitions in \code{core.py} in the repository}.}.
+The main input types are \path {HtmlElement}s (from \path {lxml.html}), the classes defined in the module (discussed next), and a few dictionary structures, which are specified with \path {typing}\footnote{\href{https://docs.python.org/3.6/library/typing.html}{Link to the typing library's page in Python 3.6}.} for documentation\footnote{\href{https://github.com/joaopcbertoldo/pymdr/blob/7ff7f7653feff23704b6b786db8499188ba378af/src/core.py\#L273}{Link to their definitions in \path {core.py} in the repository}.}.
 
 
 
 \subsubsection{Dependencies}
 
-\paragraph{lxml} After reading about\footnote{For instance,   \href{https://tomassetti.me/parsing-html/\#python}{this review on \emph{tomassetti.me}}.} and experimenting with a few Python libraries for HTML handling, I chose \code{lxml} for a few reasons. First, it is designed to work with the \code{ElementTree} API, making it simple to treat the HTML document as a tree structure like the original paper does. Second, it is fairly easy to parse the HTML and serialize the objects, which are the main functionalities I used. And finally, it is not full of fancy features that I did not need like other options.
+\paragraph{lxml} After reading about\footnote{For instance,   \href{https://tomassetti.me/parsing-html/\#python}{this review on \emph{tomassetti.me}}.} and experimenting with a few Python libraries for HTML handling, I chose \path {lxml} for a few reasons. First, it is designed to work with the \path {ElementTree} API, making it simple to treat the HTML document as a tree structure like the original paper does. Second, it is fairly easy to parse the HTML and serialize the objects, which are the main functionalities I used. And finally, it is not full of fancy features that I did not need like other options.
 
-\paragraph{graphviz} Since the original goal was to generate visualizations, I also reviewed several options for graph rendering and chose \code{graphviz} because it is open source and provides a fairly simple interface for the features I was looking for. In the end, it was not used in the main code, but you may find some utility functions that can be used to render a graph from an \code{HtmlElement}.
+\paragraph{graphviz} Since the original goal was to generate visualizations, I also reviewed several options for graph rendering and chose \path {graphviz} because it is open source and provides a fairly simple interface for the features I was looking for. In the end, it was not used in the main code, but you may find some utility functions that can be used to render a graph from an \path {HtmlElement}.
 
-\paragraph{python-Levenshtein} One of the core tasks in the algorithm is to measure the (normalized) Levenshtein edit distance between strings - "similar" GNodes are those for which this distance is bellow a predefined threshold. I initially used the library \code{strsim}\footnote{\href{https://pypi.org/project/strsim/}{Link to \code{strsim}'s PiPy page}.}, but it started creating problems (which I could not debug) at some point. Therefore I switched to the implementation in \code{python-Levenshtein}\footnote{\href{https://pypi.org/project/python-Levenshtein/}{Link to \code{python-Levenshtein}'s PiPy page}.}.
+\paragraph{python-Levenshtein} One of the core tasks in the algorithm is to measure the (normalized) Levenshtein edit distance between strings - "similar" \gn{} s are those for which this distance is bellow a predefined threshold. I initially used the library \path {strsim}\footnote{\href{https://pypi.org/project/strsim/}{Link to \path {strsim}'s PiPy page}.}, but it started creating problems (which I could not debug) at some point. Therefore I switched to the implementation in \path {python-Levenshtein}\footnote{\href{https://pypi.org/project/python-Levenshtein/}{Link to \path {python-Levenshtein}'s PiPy page}.}.
 
 
 
 \subsubsection{Classes} \label{txt:classes}
 
-\paragraph{GNode}
+\paragraph{\gn{}}
 
-It corresponds exactly to the concept of \emph{Generalized Node} introduced in the original paper to represent a set subsequent HTML tags in the document graph. A GNode includes all the subtrees starting at its nodes. In practice, it is referenced by the parent node's name and the 0-starting indices of the first and last nodes of the GNode.
+It corresponds exactly to the concept of \emph{Generalized Node} introduced in the original paper to represent a set subsequent HTML tags in the document graph. A \gn{} includes all the subtrees starting at its nodes. In practice, it is referenced by the parent node's name and the 0-starting indices of the first and last nodes of the \gn{}.
 
-\paragraph{DataRegion} A DataRegion is a tuple with the GNode size (i.e. the number of HTML nodes in it), the index of the first node of the first GNode, and the number of nodes covered by the GNode. This notation is not very intuitive but it is rather handy inside the algorithms that use it. For practical reasons, I also added to it the parent node's name - which is, by definition, the same as its covered GNodes' parent. 
+\paragraph{\dr{}} 
 
-\paragraph{DataRecord} \label{txt:class-data-record} Most of the time, DataRecords correspond exactly to one DataRegion. However, some data records might be split in more than one DataRegion, for instance when the titles of the objects are in cells of a table row and the description in the respective cells of the next row\footnote{This particular type of case is better explained in the section \say{Non-contiguous object descriptions} in \cite{mdr}}. Therefore, a DataRecord object is a list of GNodes, so both cases can be treated uniformly.
+A \dr{} is a tuple with the \gn{} size (i.e. the number of HTML nodes in it), the index of the first node of the first \gn{}, and the number of nodes covered by the \gn{}. This notation is not very intuitive but it is rather handy inside the algorithms that use it. For practical reasons, I also added to it the parent node's name - which is, by definition, the same as its covered \gn{} s' parent. 
 
-\paragraph{NodeNamer} Unfortunately, \code{lxml}'s implementation does not have a consistent \code{id()} (same for \code{\_\_hash\_\_()}). I do not know the reason, but I empirically checked that the same object might have a different result for those functions between calls (during the same run time). For this reason, it is not easy to uniquely reference any node of a generic HTML document. My solution was to add a node name as a tag attribute to the nodes themselves with a sequential value. This class serves as stateful function that is used as a shortcut to get that value from the \code{HtmlElement}s and to avoid a snippet repetition. 
+\paragraph{\drec{}}\label{txt:class-data-record} 
+
+Most of the time, \drec{} s correspond exactly to one \dr{}. However, some data records might be split in more than one \dr{}, for instance when the titles of the objects are in cells of a table row and the description in the respective cells of the next row\footnotemark{}. Therefore, a \drec{} object is a list of \gn{} s, so both cases can be treated uniformly.
+
+\footnotetext{This particular type of case is better explained in the section \say{Non-contiguous object descriptions} in \cite{mdr}}
+
+\paragraph{\nodenamer{}} Unfortunately, \path{lxml}'s implementation does not have a consistent \path{id()} (same for \path{__hash__()}). I do not know the reason, but I empirically checked that the same object might have a different result for those functions between calls (during the same run time). For this reason, it is not easy to uniquely reference any node of a generic HTML document. My solution was to add a node name as a tag attribute to the nodes themselves with a sequential value. This class serves as stateful function that is used as a shortcut to get that value from the \path{HtmlElement}s and to avoid a snippet repetition. 
 
 \paragraph{MDR} This class is rather an utility that puts together all the pieces of the algorithm (written in functions). It makes easier to access a number of variables and mappings (the data structures described bellow) that are passed between the functions.
 
@@ -236,9 +255,9 @@ It corresponds exactly to the concept of \emph{Generalized Node} introduced in t
 
 These two are important data structures for understanding the code because the act like mappings of information. They are used to pass sub-results between the sub algorithms.
 
-\paragraph{DISTANCES\_DICT\_FORMAT} It keeps all the distances between pairs of GNodes, which are all computed before being used. This dictionary's keys are the node names which maps to another dictionary. This one maps the possible GNode sizes (integers from $1$ up to $\maxnodes$) to yet another dictionary. The latter maps pairs of GNodes to distances (a float between $0$ and $1$).
+\paragraph{DISTANCES\_DICT\_FORMAT} It keeps all the distances between pairs of \gn{} s, which are all computed before being used. This dictionary's keys are the node names which maps to another dictionary. This one maps the possible \gn{}  sizes (integers from $1$ up to $\maxnodes$) to yet another dictionary. The latter maps pairs of \gn{} s to distances (a float between $0$ and $1$).
 
-\paragraph{DATA\_REGION\_DICT\_FORMAT} This one maps the nodes' names the set of DataRegions found under that node.
+\paragraph{DATA\_REGION\_DICT\_FORMAT} This one maps the nodes' names the set of\dr{} s found under that node.
 
 
 
@@ -248,19 +267,21 @@ The main functions correspond almost exactly to the pseudo codes described in th
 
 \begin{itemize}
     
-    \item \textbf{compute\_distances}: recursively pass over all the nodes to compute the distance dictionaries;
+    \item \computedistances recursively pass over all the nodes to compute the distance dictionaries;
     
-    \item \textbf{\_compare\_combinations}: on a given node, effectively goes through all the possible combinations of pairs of GNodes of all sizes and computes the distances;
+    \item \comparecombinations: on a given node, effectively goes through all the possible combinations of pairs of \gn{} s of all sizes and computes the distances;
     
-    \item \textbf{find\_data\_regions}: recursively find all the data regions under a subtree of HTML document;
+    \item \finddataregions: recursively find all the data regions under a subtree of HTML document;
     
-    \item \textbf{\_identify\_data\_regions}: on a given node, find all the disconnected data regions such that each one is the largest (in terms of covered node) possible; 
+    \item \identifydataregions: on a given node, find all the data regions such that each one is the largest (in terms of covered node) possible; 
     
-    \item \textbf{find\_data\_records}\footnote{This algorithm is not directly given in the paper like the other, but only described in the text.}: scans all the DataRegions to extract DataRecords accordingly to two different cases: when the GNode sizes are of size 1 (with \_find\_records\_1) or larger (with \_find\_records\_n);
+    \item \finddatarecords\footnotemark: scans all the\dr{} s to extract \drec{} s accordingly to two different cases: when the \gn{}  sizes are of size 1 (with \findrecordsone) or larger (with \findrecordsn);
     
-    \item \textbf{\_find\_records\_1}: creates DataRecords either from all the GNodes of the DataRegion or from its children;
+    \footnotetext{This algorithm is not directly given in the paper like the other, but only described in the text.}
     
-    \item \textbf{\_find\_records\_n}: creates DataRecords directly from the GNodes covered by the DataRegion or from pieces of them to handle the case where the records are not contiguous (see the paragraph about the \nameref{txt:class-data-record} class).
+    \item \findrecordsone: creates \drec{} s either from all the \gn{} s of the \dr{} or from its children;
+    
+    \item \findrecordsn: creates \drec{} s directly from the \gn{} s covered by the \dr{} or from pieces of them to handle the case where the records are not contiguous (see the paragraph about the \nameref{txt:class-data-record} class).
     
 \end{itemize}
 
@@ -274,11 +295,11 @@ The algorithm has three parameters that are passed to the initialization of the 
 
 \begin{itemize}
     
-    \item \textbf{minimum\_depth}: all nodes with a tree depth\footnote{\href{https://en.wikipedia.org/wiki/Tree-depth}{Link to the definition of "Tree depth" on Wikipedia}.} are not taken into consideration in the recursive calls of the functions described above. As a consequence, any direct child of these nodes can never be part of a DataRecord;
+    \item \textbf{\path{minimum_depth}}: all nodes with a tree depth\footnote{\href{https://en.wikipedia.org/wiki/Tree-depth}{Link to the definition of "Tree depth" on Wikipedia}.} are not taken into consideration in the recursive calls of the functions described above. As a consequence, any direct child of these nodes can never be part of a \drec{} ;
     
-    \item \textbf{max\_tag\_per\_gnode} ($\maxnodes$): the largest GNode size taken into consideration;
+    \item \textbf{max\_tag\_per\_gnode} ($\maxnodes$): the largest \gn{}  size taken into consideration;
     
-    \item \textbf{edit\_distance\_threshold}: the maximum distance between two GNodes for them to be considered \emph{close} - therefore, possibly in the same DataRegion.
+    \item \textbf{edit\_distance\_threshold}: the maximum distance between two \gn{} s for them to be considered \emph{close} - therefore, possibly in the same\dr{} .
     
 \end{itemize}
 
@@ -304,11 +325,11 @@ The extension must be installed using Chrome's developer mode on and with a flas
 
 The other two modules are rather for support tasks like managing files and pre-treating the HTML files. They are mostly used in the API and in the script used to process all the pages (more details in the next sections). 
 
-\paragraph{Files management} 
+\paragraph{\path{files_management}} 
 
-This module gathers utilities to write/read from files and get the their paths easily. The organization of the files mostly depends on the class \code{PageMeta}, which is used to access metadata from an annotated page. All the files are referenced by a (shortened) hash of the URL of the raw HTML page where they come from. They are all located in a directory \emph{outputs} in the root of the project by default. This directory's location can be changed in the file \emph{config.yml} in the root of the project.
+This module gathers utilities to write/read from files and get the their paths easily. The organization of the files mostly depends on the class \path {PageMeta}, which is used to access metadata from an annotated page. All the files are referenced by a (shortened) hash of the URL of the raw HTML page where they come from. They are all located in a directory \emph{outputs} in the root of the project by default. This directory's location can be changed in the file \emph{config.yml} in the root of the project.
 
-\paragraph{(Pre \& Post)-Processing}
+\paragraph{\path{prepostprocessing}}
 
 The functions in this module are basically wrappers around each sub-algorithm that compose MDR (explained in the Section \nameref{txt:functions}). They save intermediate results in files, load them from previous steps, and sure that the files already processed are skipped. This is useful to execute the test script used to investigate the factors that influence the algorithm so that the executions are consistent between calls.
 
@@ -316,7 +337,7 @@ The functions in this module are basically wrappers around each sub-algorithm th
 
 \subsection{Unit tests}
 
-The directory \emph{test} (see has the same structure than \emph{src} and the respective files contain unit tests for those in \emph{src}. They use Python's builtin package \code{unittest}. For maintenance purposes, I did not create unit tests for everything, but only for the most important parts of the algorithm. They were indeed very useful during my iterations of the code making sure to keep the code correct. 
+The directory \emph{test} (see has the same structure than \emph{src} and the respective files contain unit tests for those in \emph{src}. They use Python's builtin package \path {unittest}. For maintenance purposes, I did not create unit tests for everything, but only for the most important parts of the algorithm. They were indeed very useful during my iterations of the code making sure to keep the code correct. 
 
 These tests have rather simple input/output test. So, it might be a useful entry point to understand what each function is supposed to do and the data formats. 
 
@@ -338,7 +359,7 @@ My hypothesis is that web pages, today, use table tags way less often today. Acc
 
 
 
-\subsection{Analyzed factors}
+\subsection{Analyzed factors} \label{txt:analyzed-factors}
 
 The following paragraphs explain the different variations of the algorithm that I tested.
 
@@ -353,13 +374,13 @@ The original recommended value was of $0.30$, so it makes sense to keep the thre
 
 \paragraph{HTML Lists} 
 
-MDR was designed to work well on pages that use table tags, so taking all the HTML tags into consideration did not make any sense. On the other hand, taking the authors' same assumption and only taking into consideration the table tags seemed too restrictive. Thus, I decided to consider both a version only with tables and another with lists additionally. This behavior can be controlled by changing the function \code{should\_process\_node} in \emph{core.py}.
+MDR was designed to work well on pages that use table tags, so taking all the HTML tags into consideration did not make any sense. On the other hand, taking the authors' same assumption and only taking into consideration the table tags seemed too restrictive. Thus, I decided to consider both a version only with tables and another with lists additionally. This behavior can be controlled by changing the function \path {should\_process\_node} in \emph{core.py}.
 
 \paragraph{Edit distance distortion}
 
-While reviewing and cleaning my code, I realized that I could have introduced an issue to the algorithm by distorting the edit distances. This happened due to the naming solution (see the class NodeNamer in the section \nameref{txt:classes}) I used to reference the nodes. Since it adds a new attribute to the tags. While serializing subtrees this attribute ends up being part of the string. This affects the distance measure especially for nodes with little content because the sizes of the attribute's key and value make the distances decrease artificially. 
+While reviewing and cleaning my code, I realized that I could have introduced an issue to the algorithm by distorting the edit distances. This happened due to the naming solution (see the class \nodenamer{} in the section \nameref{txt:classes}) I used to reference the nodes. Since it adds a new attribute to the tags. While serializing subtrees this attribute ends up being part of the string. This affects the distance measure especially for nodes with little content because the sizes of the attribute's key and value make the distances decrease artificially. 
 
-For this reason, I made a hot fix that cleans all the attributes from the subtrees before measuring the distances. The parameter used to control this behavior is the constant \code{STR\_DIST\_USE\_NODE\_NAME\_CLEANUP} in \emph{core.py}.
+For this reason, I made a hot fix that cleans all the attributes from the subtrees before measuring the distances. The parameter used to control this behavior is the constant \path {STR\_DIST\_USE\_NODE\_NAME\_CLEANUP} in \emph{core.py}.
 
 Therefore, there are 4 tests: $\{\text{with lists}, \text{without lists}\} X \{\text{with correction}, \text{without correction}\}$ (where \say{correction} refers to the distance distortion fix). For each of those, I tested all the threshold values, looked up for the best values, and inspected some \emph{promising} results manually in detail.
 
@@ -383,35 +404,125 @@ I used the script in \path{dev/training/preprocess_all.py} to go through all the
 
 \paragraph{Outputs}
 
-The results and intermediate files generated by the script are organized in the folder \path{outputs} under the root of the project. This is due to the \path{file_management.py} module and can be changed via the file \path{config.yml} in the root of the project (see the section \nameref{txt:other-modules} for more information). The folder contains the following sub directories: 
+The results and intermediate files generated by the script are organized in the folder \path{outputs} under the root of the project. This is due to the \path{file_management.py} module and can be changed via the file \path{config.yml} in the root of the project (see the section \nameref{txt:other-modules} for more information). The folder contains the following subdirectories: 
 
 \begin{itemize}
 
-    \item \path{raw\_htmls}: contains the cached HTML pages without any modification;
+    \item \path{raw_htmls}: contains the cached HTML pages without any modification;
         
-    \item \path{preprocessed\_htmls}: contains HTML files after two phases of preprocessin: (1) without comments, script, and style tags; (2) with the node names added to all the tags (see \code{NodeNamer} in \nameref{txt:classes}).
+    \item \path{preprocessed_htmls}: contains HTML files after two phases of preprocessin: (1) without comments, script, and style tags; (2) with the node names added to all the tags (see \nodenamer{} in Section \say{\nameref{txt:classes}}).
         
-    \item \path{intermediate\_results}: 
+    \item \path{intermediate_results}: contains two types of file: (1) the precomputed distances, output from the function \computedistances{}; (2) the precomputed \dr{}s, whose files are separated by different threshold values\footnotemark because this parameter directly impacts the results. 
+    
+    \footnotetext{Values are rounded up to two decimal places.}
         
-    \item \path{results}: 
+    \item \path{results}: contains the \drec{}s in separate files following the same logic of the \dr{} files (i.e. by threshold value). It may also contain HTML files where the background of the tags in the same \drec{} are of the same color for inspection.
     
 \end{itemize}
+
+\paragraph{Reproduction}
+
+All the result files can be found in the file \path{outputs/bkps-all.zip}. To inspect them, extract everything to \path{outputs}. You will see four backup directories starting with \say{bkp}, they correspond to the four different cases tested. To executed the Jupyter Notebooks mentioned in the previous paragraph, move the two directories inside one of these backup (\path{intermediate_results} and \path{results}) to \path{outputs}.
+
+There are four notebooks inside \path{dev/training} - again, corresponding to the combinations of parameters. They have all been executed with the parameters indicated in the files' names and in their first cells. I recommend looking, first, at \path{evaluating_stuff-with-list-with-cleanup.ipynb} because it is better documented with explanations. All the others have the same code, but were not as much documented.
+
+The reader can also easily rerun all the tests by executing the script in \path{dev/training/preprocess_all.py} - please note that the instructions in the \path{README.md} file should be followed before. Make sure that you empty the \path{outputs} folder before executing (except for the \path{pages-meta.yml}). You should also verify which steps of the process should be executed by setting the boolean parameters of the function \func{main} inside the script. If some steps are marked as \path{False}, the results of that step are assumed to be already processed. 
+
+
+
+\subsection{Evaluation}
+
+\paragraph{Partial annotations} Since the task of manually annotating the data records inside each HTML file would have been too laborious, I opted for another solution. As mentioned before, I only annotated the correct number of data records on the pages, which is relatively easy to execute. For instance, see \href{https://www.circuitcity.com/products/health-personal-care-beauty.html}{\textit{this page}}: it has 12 records. Note that, if the algorithm finds 12 data records, it does not necessarily means that it worked. The results might be in a completely different part of the HTML page that does not have any data record \emph{de facto}.
+
+\paragraph{Simplification assumption} However, if it does not have 12 records in the results (or, say, 'almost'), it probably did not find the correct records. This is a reasonable assumption because the data records are usually adjacent. Therefore, finding the correct region should entail finding the other ones as well. An exception might occur when there is a disconnected data record\footnotemark.
+
+\footnotetext{See Section \say{3.4 Data Records not in Data Regions} in \cite{mdr} for further detail}
+
+Therefore, we will assume that this \emph{soft} annotation can be used as a valid way to check if the algorithm is working properly. Besides, it is laborious to inspect raw HTMLs. This framework was also useful to filter out bad candidates (e.g. eliminating cases with 60 data records where there should be 10) in order to inspect the good ones closely.
+
+% - no precise description of tagging/labelling --> how to measure precision/recall? --> simplified way of counting to investigate --> coloring the background for visual inspection
+
+\paragraph{Visualizations} 
+
+Since it is not reliable to compute accuracy metrics on this signal, I manually inspected many results and generated several visualizations to find good candidates. This is not in any measure negative for the sake of comparing results with the \cite{mdr}. They did not explain precisely how their data was annotated, how the precision and were computed, and did not make the data available. Therefore, having those metrics would not be of more utility than checking the results individually for the sake of this project. 
+
+The Figure \ref{fig:results-in-margin} shows, on the y-axis, the pages (there is no correlation between the number and the page itself) and, on the x-axis, the threshold values tested for each of them. The dots displayed represent $(\text{page}, \text{threshold})$ pairs where the number of data records returned by MDR is within a margin of $\pm 5$ relative to the ground truth. In the previously mentioned Jupyter Notebooks, you will find more detailed visualizations that I used.
 
 
 
 \subsection{Results}
 
-\paragraph{Evaluation}
+Despite trying to adapt the algorithm to today's pages, it does not seem to adapt anymore. The Figure \ref{fig:results-in-margin} show that no threshold seems to adapt well to the pages and, more generally, the algorithm does not succeed in finding data records properly.
 
-% - no precise description of tagging/labelling --> how to measure precision/recall? --> simplified way of counting to investigate --> coloring the background for visual inspection
+As mentioned in Section \say{\nameref{txt:analyzed-factors}}, without considering list elements almost nothing is detected at all. This can be seem comparing Figures \ref{fig:results-without-list} and \ref{fig:results-with-list}. The latter has way less results than the former. I also manually checked that in many of these cases it is due simply to the fact the tables are no longer used in the pages.
 
-\paragraph{Reproduction}
+Out of the four parameter combinations that I experimented with, the most promising was \say{with list elements} and \say{with correction}. There is no reason to believe that the edit distance distortion would make it better and, as argued above, it does not make sense to use the algorithm only with HTML tables.
 
-% nb with comments
-% evaluating_stuff-with-list-with-cleanup.ipynb
+\begin{figure}[!b]
+
+    \centering
+    
+    \begin{subfigure}[b]{.49\textwidth}
+        \begin{tikzpicture}[left]
+            \node(img){
+            \includegraphics[width=0.95\linewidth, left]{fig/graph.png}
+            };
+            \node[below=of img, node distance=0cm, yshift=1cm,font=\color{red}] {Threshold value (no unit)};
+            \node[left=of img, node distance=0cm, rotate=90, anchor=center,yshift=-0.8cm,font=\color{red}] {Web page};
+        \end{tikzpicture}
+        
+        \caption{With list elements.}
+        \label{fig:results-with-list}
+        
+    \end{subfigure}
+    %
+    \begin{subfigure}[b]{.49\textwidth}
+        \begin{tikzpicture}[right]
+            \node(img){
+             \includegraphics[width=0.95\linewidth, right]{fig/withou-list.png}
+            };
+            \node[
+                below=of img, node distance=0cm, yshift=1cm, font=\color{red}
+            ]{Threshold value (no unit)};
+        \end{tikzpicture}
+        
+        \caption{Only table elements.}
+        \label{fig:results-without-list}
+        
+    \end{subfigure}
+    
+    \caption{Closest results per page in a margin of $\pm 5$. Each point is a run where the number of data records is within a margin of $\pm 5$ relative to the ground truth. The x-axis is the threshold distance used for that run and the y-axis is merely for different pages.}
+    \label{fig:results-in-margin}
+    
+\end{figure}
 
 
+Notice that the margin of $\pm 5$ used for this plot is relatively loose. A large part of the pages have only a few tens of data records, so having $5$ data records identified is already bad enough. With this in mind, there are a few things to conclude from this graph:
+
+\begin{enumerate}
+    
+    \item \textbf{There are many blank lines}: regardless of the threshold, the number of data records is \emph{far} from the ground truth.
+    
+    \item \textbf{There is no gold threshold}: the authors of MDR claim to achieve a very high accuracy with a threshold of $0.30$. Here we see that no value is capable of having relevant results in most of the pages. If it was the case, there would be a visible vertical line or column full of dots.
+    
+    \item \textbf{The sensitivity varies enormously}: we can see pages where the value of the threshold seems to not even matter, while, for others, there is are very few (or even one) values with relevant results. 
+    
+\end{enumerate}
+
+Therefore, we can see from Figure \ref{fig:results-with-list} that MDR does not perform well overall. More rigorously, the graph tells us that it \emph{probably} is not working well. I further inspected those pages using a smaller margin and a few random ones. As a matter of fact, the algorithm does not correctly find the data regions. For many of the cases where the number of data records coincides with the ground truth, the algorithm is actually capturing menus, side bars, and button panels on the web pages.
+
+
+
+\section{Conclusion}
 % would have chosen another framework if I knew the id issue...
+
+My implementation of the Mining Data Records (MDR) ended up being rather correct in terms of software engineering, but the algorithm simply does not properly work on today's pages anymore. I can see two clear improvements that could be useful for the code structure itself: (1) replacing \path{lxml} and (2) implementing more unit tests. 
+
+Although \path{lxml} has useful features and does fit well most of the need of the project, it introduced the problem with nodes identification (explained in Section \say{\nameref{txt:classes}}). This issue consequently introduced the need for another solution that is not clean and makes the implementation stateful.
+
+The unit tests showed to be very handy to debug my code as I iteratively made modifications on my code. It would probably be useful to have some examples a bit more complex in the core functions. The module \path{files_management} has some important functionalities that make it easier to manipulate the core code, so it would be useful to have unit tests for it as well.
+
+As shown in the results, unfortunately, this algorithm does not perform well on modern pages regardless of the parameters used. This work could further be improved by investigating the local behavior of the algorithm. If we verify that it is indeed possible to still use MDR with data records embedded in lists, it could be possible to make it work. For instance, by tweaking the \path{minimum_depth} it could be possible to get rid of the menus and panels.
 
 
 % %%%%%%%%%%%%%%%%%%%%%%%%%   REFS   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
