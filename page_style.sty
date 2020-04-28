@@ -43,7 +43,10 @@
 
 
 \usepackage{setspace}
-\renewcommand{\baselinestretch}{1.5} 
+% \renewcommand{\baselinestretch}{1.5}
+
+\setlength{\parskip}{.5em}
+\renewcommand{\baselinestretch}{1.2}
 
 %% ===============================================
 % Setting the line spacing (3 options: only pick one)
@@ -69,3 +72,21 @@
 }
 \lstset{style=mystyle}
 \lstset{language=Python}
+
+
+\usepackage{xcolor}
+\definecolor{darkblue}{HTML}{00037D}
+
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=darkblue,      
+    urlcolor=darkblue,
+    citecolor=darkblue,
+}
+
+\lstset{
+  basicstyle=\footnotesize,
+  xleftmargin=.2\textwidth, 
+  xrightmargin=.2\textwidth
+}

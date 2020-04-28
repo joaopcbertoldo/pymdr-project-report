@@ -1,23 +1,6 @@
 \documentclass[10pt]{article}
 \usepackage{page_style}
 
-\usepackage{xcolor}
-\definecolor{darkblue}{HTML}{00037D}
-
-\usepackage{hyperref}
-\hypersetup{
-    colorlinks=true,
-    linkcolor=darkblue,      
-    urlcolor=darkblue,
-    citecolor=darkblue,
-}
-
-\lstset{
-  basicstyle=\footnotesize,
-  xleftmargin=.2\textwidth, 
-  xrightmargin=.2\textwidth
-}
-
 % %%%%%%%%%%%%%%%%%%%%%%%%%   COMMANDS   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \newcommand{\ts}{\textsuperscript}
 \newcommand{\maxnodes}{N_{max}}
@@ -154,7 +137,7 @@ A \gn{}  is a set of $n \in \{1, ..., \maxnodes\}$ adjacent nodes (thus, under t
 The values of $\maxnodes$ and $\dth$ are parameters of the algorithm and the authors reported using, respectively, $10$ and $0.30$. Once the \dr{}s are found in the HTML, there is a scan over them that figure out where the data records are.
 
 
-\begin{figure}[!b]
+\begin{figure}[h]
     \centering
     
     \begin{subfigure}[b]{.39\textwidth}
@@ -194,10 +177,9 @@ The first implementation of the algorithm, with the suggested parameters, did no
 
 % implementation + viz...
 % core, utils, api
-\paragraph{Code structure} The next subsections will explain the main components (modules, classes, functions, etc) of my code. (Most of) The code referenced in this section is organized in the following structure\footnotemark:
+\paragraph{Code structure} The next subsections will explain the main components (modules, classes, functions, etc) of my code. (Most of) The code referenced in this section is organized in the structure shown in Listing 1.
 
-\footnotetext{\href{https://github.com/joaopcbertoldo/pymdr}{Link to the \emph{pymdr} project GitHub repository}.}
-
+\begin{minipage}{\linewidth}
 \begin{lstlisting}[caption=Main code structure.]
 # project root
 /  
@@ -227,7 +209,7 @@ The first implementation of the algorithm, with the suggested parameters, did no
 |  |  |-- preprocess_all.py
 |  ...
 \end{lstlisting}
-
+\end{minipage}
 
 
 \subsection{Core}
@@ -296,6 +278,8 @@ These two are important data structures for understanding the code because they 
 
 \paragraph{\path{DISTANCES_DICT_FORMAT}} It keeps all the distances between pairs of \gn{}s, which are computed before being used. This dictionary's keys are the node names and it maps a node to another dictionary. The latter maps the possible \gn{} sizes $n$ (integers from $1$ up to $\maxnodes$) to yet another dictionary. This last one maps pairs of \gn{} to distances (a float between $0$ and $1$). See the example below.
 
+
+\begin{minipage}{\linewidth}
 \begin{lstlisting}[caption=Illustration of a \path{DISTANCES_DICT_FORMAT}.]
 {
     # node name
@@ -317,13 +301,15 @@ These two are important data structures for understanding the code because they 
         10: {...},
     },
     "table-00001": {...},
-    "tr-00000": {...},
+    ...
 }
 \end{lstlisting}
+\end{minipage}
 
 
 \paragraph{\path{DATA_REGION_DICT_FORMAT}} This one maps the nodes' names the set of \dr{}s found under that node.
 
+\begin{minipage}{\linewidth}
 \begin{lstlisting}[caption=Illustration of a \path{DISTANCES_DICT_FORMAT}.]
 {
     # node name
@@ -331,11 +317,10 @@ These two are important data structures for understanding the code because they 
         DataRegion("table-00000", 2, 0, 4),
         DataRegion("table-00000", 3, 6, 9),
     }),
-    "table-00001": set({...}),
-    "tr-00000": set({...}),
+    "table-00001": ...,
 }
 \end{lstlisting}
-
+\end{minipage}
 
 
 \subsubsection{Functions} \label{txt:functions} 
@@ -399,7 +384,7 @@ The extension must be installed using Chrome's developer mode on and the API mus
 
 \footnotetext{\href{https://github.com/joaopcbertoldo/pymdr/blob/0.1.1/launch-api.sh}{Link to the \path{launch-me.sh} file in the repository}.}
 
-\begin{figure}[H]
+\begin{figure}[h]
     \centering
     \includegraphics[width=0.45\linewidth]{fig/pymdr-extension.png}
     \caption{Screenshot of the Pymdr Google Chrome extension.}
@@ -549,7 +534,7 @@ As mentioned in Section \say{\nameref{txt:analyzed-factors}}, without considerin
 
 Out of the four combinations of parameters that I experimented with, the most promising was \say{with list elements} and \say{with correction}. There is no reason to believe that the edit distance distortion would make it better and, as argued above, it does not make sense to use the algorithm only with HTML tables.
 
-\begin{figure}[!b]
+\begin{figure}[t]
 
     \centering
     
